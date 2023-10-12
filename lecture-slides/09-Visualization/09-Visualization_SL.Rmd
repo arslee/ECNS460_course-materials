@@ -1,0 +1,266 @@
+---
+title: "Topic 9: Data Visualization"
+author: "Nick Hagerty <br> ECNS 460/560 Fall 2023 <br> Montana State University"
+date: ".small[<br> *Parts of these slides are adapted from [“Introduction to Data Science”](http://rafalab.dfci.harvard.edu/dsbook/data-visualization-principles.html) by Rafael A. Irizarry, used under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0).]"
+output:
+  xaringan::moon_reader:
+    css: [default, metropolis, metropolis-fonts]
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      highlightSpans: true
+      countIncrementalSlides: false
+      fig_caption: true
+---
+name: toc
+
+```{css, echo=FALSE}
+# CSS for including pauses in printed PDF output (see bottom of lecture)
+@media print {
+  .has-continuation {
+    display: block !important;
+  }
+}
+.remark-code-line {
+  font-size: 95%;
+}
+.small {
+  font-size: 75%;
+}
+.medsmall {
+  font-size: 90%;
+}
+.scroll-output-full {
+  height: 90%;
+  overflow-y: scroll;
+}
+.scroll-output-75 {
+  height: 75%;
+  overflow-y: scroll;
+}
+```
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+library(knitr)
+knitr::opts_chunk$set(
+	fig.align = "center",
+	out.width="80%",
+	fig.height=4,
+	cache = TRUE,
+	dpi = 300,
+  warning = F,
+  message = F
+)
+```
+
+
+1. [Seunghyun's overall thoughts/experiences on data visualization using R](#SL_thought)
+
+1. [Basics of ggplot2](#ggplot2)
+
+1. [Plotting examples](#examples)
+
+1. [Colors and themes](#colors)
+
+1. [Principles of data visualization](#principles)
+
+1. [Case studies](#cases)
+
+
+---
+class: inverse, middle
+name: SL_thought
+
+# Seunghyun's overall thoughts/experiences on data visualization using R
+
+---
+
+# When do I use data visuzliation? 
+
+Almost all the time..
+* When exploring and checking data
+* When documenting things for research projects
+  - Documentation with good figures substantially lowers your switching cost/loading time 
+  - Rmarkdown becomes a powerful tool if you document R scripts, equations, and figures in one place  
+* When working with regressions 
+* When reporting summary stats/results
+
+---
+
+# Thought process of visualization 
+  - What is the main message to convey?
+  - Is a figure preferred to a table or verbal description?
+  - What figure will I draw? Which aspect do I want to emphasize?
+    - spatial variation vs temporal variation?
+    - overall trend or spatial variation? or particular group, space or time?
+    - level, %, change, or difference?
+    - cross-sectional variation? within-variation?
+
+---
+
+# spatial variation vs temporal variation?
+```{r, echo=F, out.width="100%", out.height="100%"}
+
+include_graphics("fig_SL/state_prices.png")
+include_graphics("fig_SL/state_yields.png")
+```
+---
+
+# spatial variation vs temporal variation?
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/county_yields.png")
+```
+---
+
+
+# overall trend vs particular time?
+
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/ts_us_price_yield.png")
+```
+
+---
+
+# overall trend vs particular time?
+US corn and soybean yield
+```{r, echo=F, out.width="70%"}
+include_graphics("fig_SL/ts - y.png")
+```
+
+
+---
+
+# overall trend vs particular time?
+
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/ts_avg_temp.png")
+```
+
+---
+
+# overall trend vs particular time?
+
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/monthly_heat_1988_2012.png")
+```
+
+
+
+---
+
+# cross-sectional vs within?
+
+```{r, echo=F, out.width="100%"}
+include_graphics("fig_SL/map_2012_heat_level.png")
+```
+
+
+---
+# cross-sectional vs within?
+
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/map_2012_heat_within.png")
+```
+
+---
+
+# level vs %?
+
+acreage for corn & soy in 1988 & 2012
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/map - acreage.png")
+```
+
+---
+
+# level vs %?
+
+% yield shock for corn & soy in 1988 & 2012
+```{r, echo=F, out.width="100%", out.height="100%"}
+include_graphics("fig_SL/map - yield shock.png")
+```
+
+
+---
+class: inverse, middle
+name: examples
+
+# Plotting examples
+
+---
+
+# Error bar plots
+Let's first run regressions by continent and summarize results. 
+(**Caution**: Don't take econometric soundness here.)
+.small[
+```{r error-bars}
+#--- load packages ---#
+library(data.table)
+library(dslabs)
+library(tidyverse)
+library(broom)
+
+#--- data to use  ---#
+df <- data.table(gapminder)
+
+#--- run regressions by continent ---#
+df_results <- map(unique(df$continent), function(x) {
+  df_in <- df[continent == x] # data for one continent
+
+  # ....run regression for one continent and save results....#
+  lm(log(infant_mortality) ~ log(population) + log(gdp), df_in) %>%
+    tidy() %>%data.table() %>%
+    .[, continent := x]
+}) %>%
+  rbindlist() %>% # bind results
+  .[str_detect(term, "pop|gdp"), # drop results on intercept
+    .(term, estimate, continent,
+      # ....construct lower and upper bounds....#
+      low = estimate - std.error * 1.96, high = estimate + std.error * 1.96)]
+
+head(df_results)
+```
+]
+
+---
+# Error bar plots
+
+.small[
+```{r}
+  ggplot(df_results, aes(x = continent, y = estimate)) +
+   geom_point(size = 1.2) +
+   geom_errorbar(aes(ymin = low, ymax = high, width = 0.2)) +
+   geom_hline(yintercept = 0, color = "grey50") +
+   facet_wrap(~term) +
+   theme_bw() +
+   labs(
+     x = "Continent",
+     y = "Point Estimate with 95% Confidence Interval",
+     title = "Regressions of log infant mortality on population and GDP"
+   )
+```
+]
+
+---
+# Error bar plots
+
+
+.small[
+```{r, fig.height=4.5, fig.width=8.5}
+ ggplot(df_results, aes(x = term, y = estimate)) +
+   geom_point(size = 1.2) +
+   geom_errorbar(aes(ymin = low, ymax = high, width = 0.2)) +
+   geom_hline(yintercept = 0, color = "grey50") +
+   facet_wrap(~continent, nrow = 1) +
+   theme_bw() +
+   theme(axis.text.x = element_text(angle = 30, hjust = .5)) +
+   labs(
+     x = "Variables",
+     y = "Point Estimate with 95% Confidence Interval",
+     title = "Regressions of log infant mortality on population and GDP"
+   )
+```
+]
+

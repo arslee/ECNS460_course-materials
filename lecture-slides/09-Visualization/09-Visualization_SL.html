@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Topic 9: Data Visualization</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Nick Hagerty   ECNS 460/560 Fall 2023   Montana State University" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link href="libs/remark-css/default.css" rel="stylesheet" />
+    <link href="libs/remark-css/metropolis.css" rel="stylesheet" />
+    <link href="libs/remark-css/metropolis-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Topic 9: Data Visualization
+]
+.author[
+### Nick Hagerty <br> ECNS 460/560 Fall 2023 <br> Montana State University
+]
+.date[
+### .small[<br> *Parts of these slides are adapted from <a href="http://rafalab.dfci.harvard.edu/dsbook/data-visualization-principles.html">“Introduction to Data Science”</a> by Rafael A. Irizarry, used under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0">CC BY-NC-SA 4.0</a>.]
+]
+
+---
+
+name: toc
+
+&lt;style type="text/css"&gt;
+# CSS for including pauses in printed PDF output (see bottom of lecture)
+@media print {
+  .has-continuation {
+    display: block !important;
+  }
+}
+.remark-code-line {
+  font-size: 95%;
+}
+.small {
+  font-size: 75%;
+}
+.medsmall {
+  font-size: 90%;
+}
+.scroll-output-full {
+  height: 90%;
+  overflow-y: scroll;
+}
+.scroll-output-75 {
+  height: 75%;
+  overflow-y: scroll;
+}
+&lt;/style&gt;
+
+
+
+
+1. [Seunghyun's overall thoughts/experiences on data visualization using R](#SL_thought)
+
+1. [Basics of ggplot2](#ggplot2)
+
+1. [Plotting examples](#examples)
+
+1. [Colors and themes](#colors)
+
+1. [Principles of data visualization](#principles)
+
+1. [Case studies](#cases)
+
+
+---
+class: inverse, middle
+name: SL_thought
+
+# Seunghyun's overall thoughts/experiences on data visualization using R
+
+---
+
+# When do I use data visuzliation? 
+
+Almost all the time..
+* When exploring and checking data
+* When documenting things for research projects
+  - Documentation with good figures substantially lowers your switching cost/loading time 
+  - Rmarkdown becomes a powerful tool if you document R scripts, equations, and figures in one place  
+* When working with regressions 
+* When reporting summary stats/results
+
+---
+
+# Thought process of visualization 
+  - What is the main message to convey?
+  - Is a figure preferred to a table or verbal description?
+  - What figure will I draw? Which aspect do I want to emphasize?
+    - spatial variation vs temporal variation?
+    - overall trend or spatial variation? or particular group, space or time?
+    - level, %, change, or difference?
+    - cross-sectional variation? within-variation?
+
+---
+
+# spatial variation vs temporal variation?
+&lt;img src="fig_SL/state_prices.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;&lt;img src="fig_SL/state_yields.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+---
+
+# spatial variation vs temporal variation?
+&lt;img src="fig_SL/county_yields.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+---
+
+
+# overall trend vs particular time?
+
+&lt;img src="fig_SL/ts_us_price_yield.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+
+---
+
+# overall trend vs particular time?
+US corn and soybean yield
+&lt;img src="fig_SL/ts - y.png" width="70%" style="display: block; margin: auto;" /&gt;
+
+
+---
+
+# overall trend vs particular time?
+
+&lt;img src="fig_SL/ts_avg_temp.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+
+---
+
+# overall trend vs particular time?
+
+&lt;img src="fig_SL/monthly_heat_1988_2012.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+
+
+
+---
+
+# cross-sectional vs within?
+
+&lt;img src="fig_SL/map_2012_heat_level.png" width="100%" style="display: block; margin: auto;" /&gt;
+
+
+---
+# cross-sectional vs within?
+
+&lt;img src="fig_SL/map_2012_heat_within.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+
+---
+
+# level vs %?
+
+acreage for corn &amp; soy in 1988 &amp; 2012
+&lt;img src="fig_SL/map - acreage.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+
+---
+
+# level vs %?
+
+% yield shock for corn &amp; soy in 1988 &amp; 2012
+&lt;img src="fig_SL/map - yield shock.png" width="100%" height="100%" style="display: block; margin: auto;" /&gt;
+
+
+---
+class: inverse, middle
+name: examples
+
+# Plotting examples
+
+---
+
+# Error bar plots
+Let's first run regressions by continent and summarize results. 
+(**Caution**: Don't take econometric soundness here.)
+.small[
+
+```r
+#--- load packages ---#
+library(data.table)
+library(dslabs)
+library(tidyverse)
+library(broom)
+
+#--- data to use  ---#
+df &lt;- data.table(gapminder)
+
+#--- run regressions by continent ---#
+df_results &lt;- map(unique(df$continent), function(x) {
+  df_in &lt;- df[continent == x] # data for one continent
+
+  # ....run regression for one continent and save results....#
+  lm(log(infant_mortality) ~ log(population) + log(gdp), df_in) %&gt;%
+    tidy() %&gt;%data.table() %&gt;%
+    .[, continent := x]
+}) %&gt;%
+  rbindlist() %&gt;% # bind results
+  .[str_detect(term, "pop|gdp"), # drop results on intercept
+    .(term, estimate, continent,
+      # ....construct lower and upper bounds....#
+      low = estimate - std.error * 1.96, high = estimate + std.error * 1.96)]
+
+head(df_results)
+```
+
+```
+##               term   estimate continent        low       high
+## 1: log(population)  0.4288477    Europe  0.3964835  0.4612119
+## 2:        log(gdp) -0.3925491    Europe -0.4187922 -0.3663060
+## 3: log(population)  0.3584601    Africa  0.3399789  0.3769413
+## 4:        log(gdp) -0.3686848    Africa -0.3866752 -0.3506943
+## 5: log(population)  0.6036123  Americas  0.5696752  0.6375495
+## 6:        log(gdp) -0.5748888  Americas -0.6044890 -0.5452885
+```
+]
+
+---
+# Error bar plots
+
+.small[
+
+```r
+  ggplot(df_results, aes(x = continent, y = estimate)) +
+   geom_point(size = 1.2) +
+   geom_errorbar(aes(ymin = low, ymax = high, width = 0.2)) +
+   geom_hline(yintercept = 0, color = "grey50") +
+   facet_wrap(~term) +
+   theme_bw() +
+   labs(
+     x = "Continent",
+     y = "Point Estimate with 95% Confidence Interval",
+     title = "Regressions of log infant mortality on population and GDP"
+   )
+```
+
+&lt;img src="09-Visualization_SL_files/figure-html/unnamed-chunk-12-1.png" width="80%" style="display: block; margin: auto;" /&gt;
+]
+
+---
+# Error bar plots
+
+
+.small[
+
+```r
+ ggplot(df_results, aes(x = term, y = estimate)) +
+   geom_point(size = 1.2) +
+   geom_errorbar(aes(ymin = low, ymax = high, width = 0.2)) +
+   geom_hline(yintercept = 0, color = "grey50") +
+   facet_wrap(~continent, nrow = 1) +
+   theme_bw() +
+   theme(axis.text.x = element_text(angle = 30, hjust = .5)) +
+   labs(
+     x = "Variables",
+     y = "Point Estimate with 95% Confidence Interval",
+     title = "Regressions of log infant mortality on population and GDP"
+   )
+```
+
+&lt;img src="09-Visualization_SL_files/figure-html/unnamed-chunk-13-1.png" width="80%" style="display: block; margin: auto;" /&gt;
+]
+
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"highlightSpans": true,
+"countIncrementalSlides": false,
+"fig_caption": true
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
